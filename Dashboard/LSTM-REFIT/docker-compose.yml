@@ -1,0 +1,14 @@
+version: '3.9'
+
+services:
+  nilmtk:
+    build: .
+    container_name: nilmtk
+    volumes:
+      - ./notebooks:/workspace/notebooks
+      - ./dataset:/workspace/dataset
+    ports:
+      - 8888:8888
+    platform: linux/amd64
+    environment:
+      - PASSWORD=nilm

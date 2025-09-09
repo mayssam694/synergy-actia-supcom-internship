@@ -1,0 +1,12 @@
+cvxpy>=1.2.1
+tensorflow>=2.11
+tensorboard>=2.11
+keras>=2.11
+ipykernel
+numpy
+pandas
+matplotlib
+seaborn
+scikit-learn
+
+

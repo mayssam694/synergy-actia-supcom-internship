@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Convertisseur TXT vers CSV</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .upload-area {
+            border: 2px dashed #4CAF50;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 20px;
+            background-color: #f9f9f9;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .upload-area:hover {
+            background-color: #f0f0f0;
+        }
+        .upload-area.dragover {
+            background-color: #e8f5e8;
+            border-color: #45a049;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .btn {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+            transition: background-color 0.3s;
+        }
+        .btn:hover {
+            background-color: #45a049;
+        }
+        .btn:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .preview {
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            max-height: 300px;
+            overflow-y: auto;
+            background-color: #f9f9f9;
+        }
+        .preview h3 {
+            background-color: #4CAF50;
+            color: white;
+            margin: 0;
+            padding: 10px;
+            border-radius: 5px 5px 0 0;
+        }
+        .preview-content {
+            padding: 15px;
+            font-family: monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+        }
+        .stats {
+            background-color: #e8f5e8;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .error {
+            background-color: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border-left: 4px solid #c62828;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Convertisseur TXT vers CSV</h1>
+        <p style="text-align: center; color: #666;">
+            Convertissez vos données de mesures électriques en format CSV<br>
+            <strong>Colonnes de sortie :</strong> Timestamp | Puissance Active (W)
+        </p>
+        
+        <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+            <div style="font-size: 48px; margin-bottom: 20px;">📁</div>
+            <h3>Cliquez ici ou glissez-déposez votre fichier .txt</h3>
+            <p style="color: #666;">Formats supportés : .txt</p>
+        </div>
+        
+        <input type="file" id="fileInput" accept=".txt" />
+        
+        <div style="text-align: center;">
+            <button class="btn" id="convertBtn" disabled onclick="convertToCSV()">
+                🔄 Convertir en CSV
+            </button>
+            <button class="btn" id="downloadBtn" style="display: none;" onclick="downloadCSV()">
+                💾 Télécharger CSV
+            </button>
+        </div>
+        
+        <div id="stats" style="display: none;"></div>
+        <div id="error" style="display: none;"></div>
+        <div id="preview" style="display: none;"></div>
+    </div>
+
+    <script>
+        let fileContent = '';
+        let csvData = '';
+        let fileName = '';
+
+        const fileInput = document.getElementById('fileInput');
+        const uploadArea = document.querySelector('.upload-area');
+        const convertBtn = document.getElementById('convertBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const statsDiv = document.getElementById('stats');
+        const errorDiv = document.getElementById('error');
+        const previewDiv = document.getElementById('preview');
+
+        // Gestion du drag & drop
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        function handleFile(file) {
+            if (!file.name.toLowerCase().endsWith('.txt')) {
+                showError('Veuillez sélectionner un fichier .txt');
+                return;
+            }
+
+            fileName = file.name.replace('.txt', '');
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                fileContent = e.target.result;
+                convertBtn.disabled = false;
+                hideError();
+                document.querySelector('.upload-area h3').textContent = `Fichier chargé: ${file.name}`;
+                document.querySelector('.upload-area p').textContent = `Taille: ${(file.size / 1024).toFixed(1)} KB`;
+            };
+            
+            reader.onerror = function() {
+                showError('Erreur lors de la lecture du fichier');
+            };
+            
+            reader.readAsText(file, 'UTF-8');
+        }
+
+        function convertToCSV() {
+            try {
+                hideError();
+                
+                // Parse le contenu du fichier
+                const lines = fileContent.split('\n');
+                const data = [];
+                let currentTimestamp = '';
+                let currentActivePower = '';
+                
+                for (let line of lines) {
+                    line = line.trim();
+                    
+                    // Détection du timestamp (format: DD/MM/YYYY HH:MM:SS)
+                    const timestampMatch = line.match(/^(\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}:\d{2})$/);
+                    if (timestampMatch) {
+                        // Si on a des données précédentes, les sauvegarder
+                        if (currentTimestamp && currentActivePower !== '') {
+                            data.push([currentTimestamp, currentActivePower]);
+                        }
+                        currentTimestamp = timestampMatch[1];
+                        currentActivePower = '';
+                        continue;
+                    }
+                    
+                    // Détection de la puissance active
+                    const activePowerMatch = line.match(/Active Power\s*=\s*([\d.-]+)/);
+                    if (activePowerMatch) {
+                        currentActivePower = activePowerMatch[1];
+                    }
+                }
+                
+                // Ajouter la dernière entrée
+                if (currentTimestamp && currentActivePower !== '') {
+                    data.push([currentTimestamp, currentActivePower]);
+                }
+                
+                if (data.length === 0) {
+                    showError('Aucune donnée trouvée. Vérifiez le format de votre fichier.');
+                    return;
+                }
+                
+                // Créer le CSV
+                csvData = 'Timestamp,Puissance Active (W)\n';
+                data.forEach(row => {
+                    csvData += `"${row[0]}",${row[1]}\n`;
+                });
+                
+                // Afficher les statistiques
+                showStats(data.length);
+                
+                // Afficher l'aperçu
+                showPreview(data);
+                
+                // Activer le bouton de téléchargement
+                downloadBtn.style.display = 'inline-block';
+                
+            } catch (error) {
+                showError(`Erreur lors de la conversion: ${error.message}`);
+            }
+        }
+
+        function showStats(recordCount) {
+            statsDiv.innerHTML = `
+                <div class="stats">
+                    <h3>✅ Conversion réussie!</h3>
+                    <p><strong>Nombre d'enregistrements:</strong> ${recordCount}</p>
+                    <p><strong>Format de sortie:</strong> CSV avec en-têtes</p>
+                    <p><strong>Colonnes:</strong> Timestamp, Puissance Active (W)</p>
+                </div>
+            `;
+            statsDiv.style.display = 'block';
+        }
+
+        function showPreview(data) {
+            const previewContent = data.slice(0, 10).map(row => 
+                `"${row[0]}",${row[1]}`
+            ).join('\n');
+            
+            const moreRecords = data.length > 10 ? `\n... et ${data.length - 10} autres enregistrements` : '';
+            
+            previewDiv.innerHTML = `
+                <div class="preview">
+                    <h3>📋 Aperçu du CSV (10 premières lignes)</h3>
+                    <div class="preview-content">Timestamp,Puissance Active (W)
+${previewContent}${moreRecords}</div>
+                </div>
+            `;
+            previewDiv.style.display = 'block';
+        }
+
+        function downloadCSV() {
+            const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${fileName}_puissance_active.csv`;
+            link.click();
+        }
+
+        function showError(message) {
+            errorDiv.innerHTML = `
+                <div class="error">
+                    <strong>❌ Erreur:</strong> ${message}
+                </div>
+            `;
+            errorDiv.style.display = 'block';
+        }
+
+        function hideError() {
+            errorDiv.style.display = 'none';
+        }
+    </script>
+</body>
+</html>
